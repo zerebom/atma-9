@@ -1,0 +1,9 @@
+**/input/**
+**/output/**
+*.zip
+*.tfrec
+*.csv
+*.bin
+
+*.pyc
+**/__pycache__/**
