@@ -4,6 +4,6 @@
 *.tfrec
 *.csv
 *.bin
-
+*.png
 *.pyc
 **/__pycache__/**
