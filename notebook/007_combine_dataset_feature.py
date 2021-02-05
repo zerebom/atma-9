@@ -1,5 +1,4 @@
 #%%
-
 import gc
 import os
 import random
@@ -20,7 +19,6 @@ import matplotlib.patches as ptc
 from sklearn.preprocessing import StandardScaler, MinMaxScaler
 import sys
 
-
 # %%
 from pathlib import Path
 sys.path.append('../')
@@ -28,12 +26,12 @@ from src.dataset import RetailDataset, create_target_from_log,only_payment_sessi
 
 from src.features.features import CountEncodingBlock, DateBlock, PublicLogBlock,MetaInformationBlock,UserHistoryBlock
 from src.utils import timer
+from src.model_utils import fit_and_predict,create_predict
 
 path = Path('../input')
 dataset = RetailDataset(file_path=path,thres_sec=10*60)
 dataset.prepare_data()
 
-#%%
 
 #%%
 # １０分以上の買い物をしたsession
@@ -55,7 +53,6 @@ train_log.head()
 
 
 #%%
-
 meta = dataset.meta
 time_elasped_count = meta['time_elapsed'].value_counts(normalize=True)
 train_time_elapsed = np.random.choice(time_elasped_count.index.astype(int),
@@ -75,6 +72,7 @@ train_meta = pd.merge(train_meta,
 print(train_meta.shape)
 train_meta.head()
 
+
 #%%
 
 _df = pd.merge(train_log[['session_id', 'spend_time']], train_meta, on='session_id', how='left')
@@ -87,6 +85,7 @@ train_pri_log = train_log[~idx_show].reset_index(drop=True)
 print(train_pub_log.shape,train_pri_log.shape)
 #0.2807101366795317
 print(len(train_pub_log)/len(train_pri_log))
+
 #%%
 
 test_input_log = dataset.get_test_input_log()
@@ -103,11 +102,29 @@ print(train_pri_log['session_id'].nunique())
 
 
 #%%
-train_private_df = train_pri_log.rename(columns={'JAN':'value_1'})
-train_target_df,_ = create_target_from_log(train_pri_log,
+# train_private = train_pri_log.rename(columns={'JAN':'value_1'})
+train_target ,_ = create_target_from_log(train_pri_log,
                        product_master_df=dataset.product_master,
                        TARGET_IDS=dataset.target_category_ids,
                        only_payment=False)
+
+#%%
+save_dir = Path('../input/tutorial2/')
+save_dir.mkdir(parents=True,exist_ok=True)
+
+test = dataset.test
+test_meta = pd.merge(test, meta, on='session_id', how='left')
+
+train_target.to_pickle(save_dir/'train_target.pkl')
+
+train_meta.to_pickle(save_dir/'train_meta.pkl')
+test_meta.to_pickle(save_dir/'test_meta.pkl')
+
+train_pub_log.to_pickle(save_dir/'train_pub_log.pkl')
+train_pri_log.to_pickle(save_dir/'train_pri_log.pkl')
+
+# train_pub + test_whole_log
+public_log.to_pickle(save_dir/'public_log.pkl')
 
 
 #%%
@@ -120,53 +137,44 @@ feature_blocks = [
 ]
 
 # %%
-feat_train_df = pd.DataFrame()
+feat_train,feate_test = pd.DataFrame() ,pd.DataFrame()
 
 for block in feature_blocks:
     with timer(prefix='fit {} '.format(block)):
         out_i = block.fit(train_meta)
     assert len(train_meta) == len(out_i), block
-    feat_train_df = pd.concat([feat_train_df, out_i], axis=1)
+    feat_train = pd.concat([feat_train, out_i], axis=1)
 
-# %%
-
-test = dataset.test
-test_meta_df = pd.merge(test, meta, on='session_id', how='left')
-feat_test_df = pd.DataFrame()
 
 for block in feature_blocks:
     with timer(prefix='fit {} '.format(block)):
-        out_i = block.transform(test_meta_df)
+        out_i = block.transform(test_meta)
 
-    assert len(test_meta_df) == len(out_i), block
-    feat_test_df = pd.concat([feat_test_df, out_i], axis=1)
-#%%
-assert len(train_target_df) == len(feat_train_df)
-
+    assert len(test_meta) == len(out_i), block
+    feat_test = pd.concat([feat_test, out_i], axis=1)
 
 #%%
+assert len(train_target) == len(feat_train)
 
-from src.model_utils import fit_and_predict,create_predict
+#%%
+
 TARGET_IDS = dataset.target_category_ids
-
-oof_df, pred_df = pd.DataFrame(), pd.DataFrame()
+oof, pred = pd.DataFrame(), pd.DataFrame()
 
 for i in TARGET_IDS:
-    oof, models = fit_and_predict(train_df=feat_train_df,
-                                target_df=train_target_df,
+    oof, models = fit_and_predict(train_df=feat_train,
+                                target_df=train_target,
                                 target_id=i)
 
     # 予測モデルで推論実行
     with timer(prefix='predict {} '.format(i)):
-        pred = create_predict(models, input_df=feat_test_df)
+        pred = create_predict(models, input_df=feat_test)
 
-    oof_df[i] = oof
-    pred_df[i] = pred
-
-# %%
-train_target_df
-
-
-
+    oof[i] = oof
+    pred[i] = pred
 
 # %%
+
+
+
+

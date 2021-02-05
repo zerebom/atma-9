@@ -35,7 +35,6 @@ TARGET_CATEGORIES = [
     # 麺類
     '麺類__カップ麺',
 ]
-
 INPUT_DIR = '../input/'
 product_master_df = pd.read_csv(os.path.join(INPUT_DIR, 'product_master.csv'), dtype={ 'JAN': str })
 cat2id = dict(zip(product_master_df['category_name'], product_master_df['category_id']))
@@ -52,7 +51,6 @@ LGBM_DEFAULT_PARAMS = {
 }
 
 def fit_lgbm(X, y, cv=None, params: dict=None, verbose=500):
-
     # パラメータがないときはデフォルトパラメータを使う
     if params is None:
         params = deepcopy(LGBM_DEFAULT_PARAMS)
@@ -87,7 +85,41 @@ def fit_lgbm(X, y, cv=None, params: dict=None, verbose=500):
 
     score = roc_auc_score(y, oof_pred)
     print('FINISHED \ whole score: {:.4f}'.format(score))
-    return oof_pred, models
+    return oof_pred, models, score
+
+
+
+def fit_and_predict(train_df,
+                    target_df,
+                    target_id,
+                    params=None,
+                    cv=None):
+    """対象の target_id の学習を行なう"""
+    target_name = category_id2code[target_id]
+
+    print('-' * 20 + ' start {} '.format(target_name) + '-' * 20)
+
+    if target_id not in TARGET_IDS:
+        raise ValueError('`target_id` は {} から選んでください'.format(','.join(str, TARGET_IDS)))
+
+    y = target_df[target_id].values
+    y = np.where(y > 0, 1, 0)
+
+    # speedup (n_split = 2)
+    if cv is None:
+        cv = StratifiedKFold(n_splits=2, random_state=71, shuffle=True)
+
+    # モデルの学習.
+    oof, models, _ = fit_lgbm(train_df.values, y, cv=cv, verbose=500,params=params)
+
+    # 特徴重要度の可視化
+    fig, ax, feature_importance_df = visualize_importance(models, train_df)
+    ax.set_title('Importance: TARGET={}'.format(target_name))
+    fig.tight_layout()
+    savefig(fig, to=f'{target_name}_importance')
+    plt.close(fig)
+
+    return oof, models, feature_importance_df
 
 
 def visualize_importance(models, feat_train_df):
@@ -113,13 +145,15 @@ def visualize_importance(models, feat_train_df):
         .sort_values('feature_importance', ascending=False).index[:100]
 
     fig, ax = plt.subplots(figsize=(8, max(6, len(order) * .2)))
+    ax.set_facecolor('white')
     sns.boxenplot(data=feature_importance_df, y='column', x='feature_importance',
                   orient='h',
                   order=order, ax=ax, palette='viridis')
+
     ax.tick_params(axis='x', rotation=90)
     ax.grid()
     fig.tight_layout()
-    return fig, ax
+    return fig, ax,feature_importance_df
 
 
 def create_predict(models, input_df) -> np.ndarray:
@@ -128,32 +162,14 @@ def create_predict(models, input_df) -> np.ndarray:
     pred = np.mean(pred, axis=0)
     return pred
 
-
-def fit_and_predict(train_df,
-                    target_df,
-                    target_id):
-    """対象の target_id の学習を行なう"""
-    target_name = category_id2code[target_id]
-
-    print('-' * 20 + ' start {} '.format(target_name) + '-' * 20)
-
-    if target_id not in TARGET_IDS:
-        raise ValueError('`target_id` は {} から選んでください'.format(','.join(str, TARGET_IDS)))
-
-    y = target_df[target_id].values
-    y = np.where(y > 0, 1, 0)
-
-    # speedup (n_split = 2)
-    cv = StratifiedKFold(n_splits=2, random_state=71, shuffle=True)
-
-    # モデルの学習.
-    oof, models = fit_lgbm(train_df.values, y, cv=cv, verbose=500)
-
-    # 特徴重要度の可視化
-    fig, ax = visualize_importance(models, train_df)
-    ax.set_title('Importance: TARGET={}'.format(target_name))
-    fig.tight_layout()
-    savefig(fig, to=f'{target_name}_importance')
-    plt.close(fig)
-
-    return oof, models
+def to_lgbm_params(params: dict):
+    retval = dict(**params)
+    retval.update({
+        'n_estimators': 10000,
+        'learning_rate': .1,
+        'objective': 'binary',
+        # 'metric': 'rmse',
+        'importance_type': 'gain',
+        # 'verbose': -1
+    })
+    return retval
