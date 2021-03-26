@@ -55,16 +55,13 @@ purchase_log = cartlog[cartlog['kind_1']=='商品']
 purchase_log['price'] = purchase_log['n_items'] * purchase_log['unit_price']
 #%%
 
+#セッションごとの買い物の値段に関する特徴量
 session_price = purchase_log.groupby('session_id')['price'].sum().reset_index()
 
 session_price_df = meta[['user_id','session_id']].\
                     merge(session_price,how='left',on='session_id').fillna(0)
 
 session_price_agg_u_df = session_price_df.groupby('user_id')['price'].agg(['mean','std','max','min','count']).fillna(0).add_prefix('ses_price_').reset_index()
-
-
-
-
 
 
 session_df = meta[['session_id','user_id']]
@@ -77,31 +74,6 @@ ses_price_mean_10x = session_price_agg_u_df[['ses_price_mean','user_id']].\
                     merge(session_df[['user_id']],how='right',on='user_id')['ses_price_mean'] * 10
 
 session_df['session_price_last10'] = session_price_last10.fillna(ses_price_mean_10x)
-
-session_df
-
-
-
-
-#%%
-# session_df[['user_id']]
-session_price_agg_u_df.reset_index()
-
-
-
-
-
-
-#%%
-
-
-
-
-#%%
-
-
-
-
 
 
 #%%
@@ -140,8 +112,6 @@ for bumon in tqdm(product_master['部門名'].unique()):
     cumsum = df.groupby('user_id')['n_items'].cumsum().fillna(0)
     _df[bumon] = (cumsum / (df.groupby('user_id')['n_items'].cumcount() + 1)).clip(0,1)
     break
-#%%
-df
 
 
 
@@ -174,34 +144,3 @@ _df = pd.pivot_table(data=purchase_df[idx_none_target],
 
 
 
-#%%
-display(purchase_df.head(5))
-display(idx_none_target.head(5))
-display(bumon_name.head(5))
-display(category.head(5))
-print(len(idx_none_target),len(bumon_name),len(category))
-
-#%%
-
-
-(0.15 + x*(n-1)) / n
-
-
-
-#%%
-purchase_df[['user_id','n_items']]
-
-
-
-
-#%%
-
-# %%
-
-
-
-
-# %%
-
-
-# %%

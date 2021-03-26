@@ -93,7 +93,9 @@ def fit_and_predict(train_df,
                     target_df,
                     target_id,
                     params=None,
-                    cv=None):
+                    cv=None,
+                    gbm_func=fit_lgbm):
+
     """対象の target_id の学習を行なう"""
     target_name = category_id2code[target_id]
 
@@ -110,7 +112,7 @@ def fit_and_predict(train_df,
         cv = StratifiedKFold(n_splits=2, random_state=71, shuffle=True)
 
     # モデルの学習.
-    oof, models, _ = fit_lgbm(train_df.values, y, cv=cv, verbose=500,params=params)
+    oof, models, _ = gbm_func(train_df.values, y, cv=cv, verbose=500,params=params)
 
     # 特徴重要度の可視化
     fig, ax, feature_importance_df = visualize_importance(models, train_df)

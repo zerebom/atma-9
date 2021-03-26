@@ -3,7 +3,6 @@ import pathlib
 import numpy as np
 import pandas as pd
 
-
 class RetailDataset:
     def __init__(self, file_path: pathlib.Path, thres_sec: int) -> None:
         self.file_path = file_path
